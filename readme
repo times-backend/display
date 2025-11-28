@@ -1,0 +1,40 @@
+# Display_QC Project - PostgreSQL Setup and SQLAlchemy Connection
+
+This README provides step-by-step instructions to set up the `preset` PostgreSQL database, import CSV data into the `placements` table, and connect using SQLAlchemy in Python.  
+
+---
+
+## 1. Install PostgreSQL (Ubuntu / WSL)
+
+```bash
+sudo apt update
+sudo apt install postgresql postgresql-client
+psql --version
+
+# Create role for Linux user
+sudo -u postgres createuser -s user_til
+
+# Create database named "preset" owned by user_til
+sudo -u postgres createdb preset -O user_til
+```
+
+```bash
+DROP TABLE IF EXISTS placements;
+
+CREATE TABLE placements (
+    id SERIAL PRIMARY KEY,
+    website TEXT NOT NULL CHECK (website <> ''),
+    platform TEXT NOT NULL CHECK (platform <> ''),
+    section TEXT NOT NULL CHECK (section <> ''),
+    geo TEXT NOT NULL CHECK (geo <> ''),
+    placement TEXT NOT NULL CHECK (placement <> ''),
+    ad_unit_type TEXT NOT NULL CHECK (ad_unit_type <> ''),
+    ad_sizes TEXT,  -- can be NULL
+    supported_innovations TEXT,  -- can be NULL
+    placement_name TEXT NOT NULL CHECK (placement_name <> '')
+);
+```
+```bash
+\copy placements(website,platform,section,geo,placement,ad_unit_type,ad_sizes,supported_innovations,placement_name)
+FROM '/path/to/csv' CSV HEADER;
+```
