@@ -37,31 +37,16 @@ def normalize_list(value):
         return [str(v).strip() for v in value]
     return []
 
-
-def dsd_vs_expresso(line_item_name: str) -> Tuple[Dict, int]:
+def is_cpd(gam_data, dsd_data) -> Tuple[Dict, int]:
     """
     Compare DSD Excel data vs Expresso GAM data for a given line item name.
     Returns (result_dict, status_code)
     """
-    line_item_name = input("Enter Parent Line Item Name: ")
-    Dsd_Download(line_item_name[:6])
-    line_item_name = clean_line_item_name(line_item_name)
-    gam_data = get_line_items_details_by_name(client=client, line_item_name=line_item_name)
-
-    dsd_data = read_file(line_item_name)
-
-    if not dsd_data:
-        return {"message": "Unable to read DSD data"}, 400
-
-    ad_server = str(dsd_data.get("Ad Server", "")).strip().lower()
-    if "double click" not in ad_server or not dsd_data.get("Parent_LI_Name"):
-        return {"message": "Invalid Ad Server or missing Parent_LI_Name"}, 400
-
+    #line_item_name = input("Enter Parent Line Item Name: ")
+    
     matched, unmatched = {}, {}
-
     # Normalize DSD placements (from placement_names)
     dsd_placements_list = normalize_list(placement_names)
-
     # --- Loop through GAM data ---
     for g in gam_data:
 
@@ -75,10 +60,12 @@ def dsd_vs_expresso(line_item_name: str) -> Tuple[Dict, int]:
         checks = {
             "cpd_daily_rate": (g.get("cpd_daily_rate"), dsd_data.get("Rate")),
             "currency_code": (g.get("currency_code"), dsd_data.get("Currency")),
-            "start_date": (parse_date(g.get("start_date")), parse_date(dsd_data.get("Start_Date"))),
-            "end_date": (parse_date(g.get("end_date")), parse_date(dsd_data.get("End_Date"))),
-        }
-
+            "start_date": (parse_date(g.get("start_date")), parse_date(dsd_data.get("PHB Booking Date"))),
+            "end_date": (parse_date(g.get("end_date")), parse_date(dsd_data.get("PHB Booking Date"))),
+            "start_time": (g.get("start_time"), "00:00:00"),
+            "end_time": (g.get("end_time"), "23:59:59"),
+        } 
+       
         for field, (g_val, d_val) in checks.items():
             if g_val == d_val:
                 matched[field] = {"gam": g_val, "dsd": d_val}
@@ -135,15 +122,34 @@ def dsd_vs_expresso(line_item_name: str) -> Tuple[Dict, int]:
                 if g_name not in unmatched[field_name]["unmatch_line_item"]:
                     unmatched[field_name]["unmatch_line_item"].append(g_name)
 
-    print("\nMatched Fields:\n", unmatched)
+    print("\nMatched Fields:\n", matched)
+    print("\nUnmatched Fields:\n", unmatched)
   
 
     return {"matched_fields": matched, "unmatched_fields": unmatched}, 200
 
+def dsd_vs_expresso(line_item_name: str) -> Tuple[Dict, int]:
+    """
+    Compare DSD Excel data vs Expresso GAM data for a given line item name.
+    Returns (result_dict, status_code)
+    """
+    Dsd_Download(line_item_name[:6])
+    line_item_name = clean_line_item_name(line_item_name)
+    gam_data = get_line_items_details_by_name(client=client, line_item_name=line_item_name)
+   
+    dsd_data = read_file(line_item_name)
+    
+    if not dsd_data:
+        return {"message": "Unable to read DSD data"}, 400
 
+    ad_server = str(dsd_data.get("Ad Server", "")).strip().lower()
+    if "double click" not in ad_server or not dsd_data.get("Parent_LI_Name"):
+        return {"message": "Invalid Ad Server or missing Parent_LI_Name"}, 400
+
+    is_cpd(gam_data,dsd_data)
 
 #dsd_vs_expresso("27651110DOMEINTERATILBOTHINALLCPMVERNEWSSTDBANFY23TILSTANDARDBANNERPKG215107")
 
-#dsd_vs_expresso(line_item_name="286248180DOMEWPPTILBOTHINATFCPDTLGSMYMSOVFY24RTILMRECPPDPKG218529")
+#dsd_vs_expresso(line_item_name="28674670INTLBHARTITILBOTH04ATFCPDTOISOVBIHELECCUSFY25TILMRECPPDPKG217975_MREC_PPD_01ST_NOV")
 
-dsd_vs_expresso(line_item_name="28983520DOMEPOORVITILBOTHINALLCPMVERNEWSSTDBANFY23TILSTANDARDBANNERPKG219576")
+dsd_vs_expresso(line_item_name="28635260DOMERAYMONTILBOTH1ATFCPDTOIGEORBFULLFY25PAGEPUSHDOWNPKG219849_ppdWAP_LI_ACE")
