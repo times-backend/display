@@ -43,13 +43,17 @@ def filter_df(TAB,sheet_url):
         for_filter_df['Ad Unit Type']
         .str.replace(r'^TIL_', '', regex=True)
     )
-
+    for_filter_df['Section'] = (
+    for_filter_df['Section']
+        .str.replace(r'(?i)\(\s*Excl PTG\s*\)', '', regex=True)
+        .str.strip()
+)
     # Normalize MREC PPD to MREC
     for_filter_df = for_filter_df.replace(
         {r'(?i)\bMREC PPD\b': 'MREC'}, regex=True
     )
     for_filter_df = for_filter_df.replace(
-        {r'(?i)\bMWEB PPD\b': 'TOP_BANNER'}, regex=True
+        {r'(?i)\b(?:MWEB PPD|Page Push Down)\b': 'TOP_BANNER'}, regex=True
     )
     for_filter_df = for_filter_df.replace(
         {r'(?i)\bBillboard\b': 'Leaderboard'}, regex=True

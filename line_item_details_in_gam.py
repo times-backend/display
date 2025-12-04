@@ -16,6 +16,9 @@ GAM_MINUTES = {
     "FORTY_FIVE": 45
 }
 
+#---------------------------------------------------------------------------------------------------------------------------------------------
+#                           Helper Functions for Daypart Expansion , Placement and AdUnit Names
+#---------------------------------------------------------------------------------------------------------------------------------------------
 def expand_daypart_to_dates(start_date, end_date, day_parts):
     """
     Given a date range and dayParts, returns a list of all matching date/time runs.
@@ -27,40 +30,30 @@ def expand_daypart_to_dates(start_date, end_date, day_parts):
     unique_dates = set()
     unique_days = set()
 
-    # Convert start/end to datetime objects
     start_date_dt = datetime.strptime(start_date, "%Y-%m-%d")
     end_date_dt = datetime.strptime(end_date, "%Y-%m-%d")
 
-    # Loop through date range
     current_date = start_date_dt
     while current_date <= end_date_dt:
-        weekday = calendar.day_name[current_date.weekday()].upper()  # E.g., 'SUNDAY'
+        weekday = calendar.day_name[current_date.weekday()].upper()
 
         for dp in day_parts:
             dp_weekday = dp.get('dayOfWeek')
             if dp_weekday != weekday:
                 continue
-
-            # Get the dynamic startTime and endTime from the daypart data
             start_time = dp.get('startTime', {})
             end_time = dp.get('endTime', {})
-
             start_hour = start_time.get('hour', 0)
             start_minute = GAM_MINUTES.get(start_time.get('minute', 'ZERO'), 0)
             end_hour = end_time.get('hour', 0)
             end_minute = GAM_MINUTES.get(end_time.get('minute', 'ZERO'), 0)
-
-            # Collect the date and day
             unique_dates.add(current_date.strftime("%Y-%m-%d"))
             unique_days.add(dp_weekday)
 
         current_date += timedelta(days=1)
 
-    # Convert sets to sorted lists
     dates_list = sorted(list(unique_dates))
     days_list = sorted(list(unique_days))
-
-    # Return the structured result with dynamic start and end times
     return [{
         "dates": dates_list,
         "days": days_list,
@@ -68,15 +61,23 @@ def expand_daypart_to_dates(start_date, end_date, day_parts):
         "endTime": f"{end_hour:02d}:{end_minute:02d}",
     }]
 
-
+#--------------------------------------------------------------------------------------------------
 
 def parse_gam_date(date_obj) -> Optional[str]:
-        """Convert GAM date object to string YYYY-MM-DD."""
-        if date_obj and hasattr(date_obj, 'date'):
-            d = date_obj.date
-            return f"{d.year:04d}-{d.month:02d}-{d.day:02d}"
-        return None
+    """Convert GAM date object to string YYYY-MM-DD."""
+    if date_obj and hasattr(date_obj, 'date'):
+        d = date_obj.date
+        return f"{d.year:04d}-{d.month:02d}-{d.day:02d}"
+    return None
 
+def parse_gam_time(obj) -> Optional[str]:
+    
+    """Extract time (HH:MM:SS) from GAM date-time object."""
+    if obj and hasattr(obj, 'hour') and hasattr(obj, 'minute') and hasattr(obj, 'second'):
+        return f"{obj.hour:02d}:{obj.minute:02d}:{obj.second:02d}"
+
+
+#--------------------------------------------------------------------------------------------------------
 def get_placement_and_adunit_names_by_id(client, targetedAdUnits, excludedAdUnits, targetedPlacementIds):
     """
     Retrieves the names of ad units and placements from Google Ad Manager
@@ -208,7 +209,9 @@ def get_value_names(client , key_id, value_ids):
             value_id_to_name[getattr(item, 'id')] = getattr(item, 'name')
     return [value_id_to_name.get(v_id, f"Unknown_Value_{v_id}") for v_id in value_ids]
 
-
+#---------------------------------------------------------------------------------------------------------------------------------------------
+#                                    Fetch Line Item Details by Name
+#---------------------------------------------------------------------------------------------------------------------------------------------
 #client = ad_manager.AdManagerClient.LoadFromStorage(NEW_GAM)
 def get_line_items_details_by_name(client, line_item_name: str) -> List[Dict[str, Any]]:
     """
@@ -234,7 +237,7 @@ def get_line_items_details_by_name(client, line_item_name: str) -> List[Dict[str
         return []
 
     results = getattr(response, 'results', [])
-    #print(results)
+
     if not results:
         #logger.info(f"No matching line items found for: {line_item_name}")
         return []
@@ -289,6 +292,9 @@ def get_line_items_details_by_name(client, line_item_name: str) -> List[Dict[str
         # Dates
         start_date = parse_gam_date(getattr(item, 'startDateTime', None))
         end_date = parse_gam_date(getattr(item, 'endDateTime', None))
+        line_start_time = parse_gam_time(getattr(item, 'startDateTime', None))
+        end_start_time = parse_gam_time(getattr(item, 'endDateTime', None))
+        
         
         inventory_targeting = getattr(targeting, "inventoryTargeting", None)
         targeted_ad_unit_ids = []
@@ -365,8 +371,8 @@ def get_line_items_details_by_name(client, line_item_name: str) -> List[Dict[str
 
         daypart_targeting = getattr(targeting, 'dayPartTargeting', None)
         parsed_day_parts = []
+     
         if daypart_targeting:
-            #print(daypart_targeting)
             day_parts_raw = getattr(daypart_targeting, 'dayParts', [])
             
             for dp in day_parts_raw:
@@ -385,9 +391,10 @@ def get_line_items_details_by_name(client, line_item_name: str) -> List[Dict[str
                         'minute': getattr(end_time, 'minute', 'ZERO')
                     }
                 })
+      
         if parsed_day_parts:
             daypart_run_dates = expand_daypart_to_dates(start_date, end_date, parsed_day_parts)
-        #print(daypart_run_dates)
+        
         all_line_item_details.append({
             "name": name,
             "status": status,
@@ -406,10 +413,11 @@ def get_line_items_details_by_name(client, line_item_name: str) -> List[Dict[str
             "targetedPlacement": targeted_placement_names if targeted_placement_names else [],
             "audience": transformed_audience if transformed_audience else [],
             "day_parting_dates":daypart_run_dates if daypart_run_dates else [{"date":"Runs on single day" }],
-            "cpd_daily_rate" : daily_rate_amt
+            "cpd_daily_rate" : daily_rate_amt,
+            "start_time": line_start_time if line_start_time else "00:00:00",
+            "end_time": end_start_time
         })
-    #logger.info(f"Found {len(all_line_item_details)} line item(s) for: {line_item_name}")
-    #print(all_line_item_details)
+    
     return all_line_item_details
 client=ad_manager.AdManagerClient.LoadFromStorage(NEW_GAM)
-get_line_items_details_by_name(client=ad_manager.AdManagerClient.LoadFromStorage(NEW_GAM), line_item_name="28624810DOMEWPPTILBOTHINATFCPDENGNEWSOVEXNPINTERFY25CUSTILINTERSTITIALPKG218526_INT")
+#get_line_items_details_by_name(client=ad_manager.AdManagerClient.LoadFromStorage(NEW_GAM), line_item_name="28635260DOMERAYMONTILBOTH1ATFCPDTOIGEORBFULLFY25PAGEPUSHDOWNPKG219849_ppdWAP_LI_ACE")

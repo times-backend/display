@@ -47,7 +47,7 @@ for _, row in df.iterrows():
         section_filter = Placement.section.in_(sections)
     else:
         section_filter = Placement.section == row['Section'].strip()
-
+    print(sections)
     result = (
         session.query(Placement)
         .filter(
@@ -63,3 +63,4 @@ for _, row in df.iterrows():
     all_results.extend(result)
 
 placement_names = [r.placement_name for r in all_results]
+print(placement_names)
